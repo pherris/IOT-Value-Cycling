@@ -1,0 +1,221 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+    <style type="text/css">
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0 }
+      #map-canvas { height: 100% }
+    </style>
+    
+    <script type="text/javascript" src="http://socketmq.m2m.io/socket.io/socket.io.js"></script>
+	<script type="text/javascript" src="http://socketmq.m2m.io/eventemitter-4.0.3.min.js"></script>
+	<script type="text/javascript" src="http://socketmq.m2m.io/socketmq-1.0.1.js"></script>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script type="text/javascript">
+    	//IE Fix
+    	if (console == null || console.log == null) {
+    	    var console = {
+    	            log: function () {
+    	                //no-op
+    	            }
+    	    };
+    	}
+    	
+    	if (JSON == null || JSON.stringify == null) {
+    	    var JSON = {
+    	            stringify: function () {
+    	                //no-op
+    	            }
+    	    };
+    	}
+	    
+	    function initialize() {
+	        console.log("initalize");
+	        
+	        var mapOptions = {
+	            center: new google.maps.LatLng(39.8282, -98.5795),
+	            zoom: 4,
+	            mapTypeId: google.maps.MapTypeId.ROADMAP
+	        };
+	        var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+	        
+	        var fun = {
+		            ridepub: {
+		                marker: 	null,
+		                polyLine: 	(function () { 
+		                    var polyLine = new google.maps.Polyline({
+                                strokeColor: "#15317E",
+                                strokeOpacity: 1.0,
+                                strokeWeight: 4,
+                                path: new Array() 
+		                    });
+		                    polyLine.setMap(map);
+		                    return polyLine;
+		                })(),
+		                
+		                /**
+		                 * draws a line with a marker at the front.
+		                 **/
+		                mapPoint: 	function (mqttMessage) {
+		                    var point = mqttMessage.message;
+		                    
+		                    if (typeof point.latitude == "string") {
+		                        point.latitude  = parseFloat(point.latitude);
+		                        point.longitude = parseFloat(point.longitude);
+		                        point.speedMetersPerSecond = parseFloat(point.speedMetersPerSecond);
+	                        }
+	                        
+		                    //throw out bad GPS
+		                    if (point.latitude.toFixed().replace("-", "") == "0" || 
+		                            point.longitude.toFixed().replace("-", "") == "0") {
+	                            return;
+	                        }
+		                    
+		                    var latLng = new google.maps.LatLng(point.latitude, point.longitude);
+		                    
+		                    map.setCenter(latLng);
+		                    
+		                    fun.ridepub.polyLine.getPath().push(latLng);
+		                    
+		                    //clear old marker
+		                    if (fun.ridepub.marker) {
+		                        fun.ridepub.marker.setMap(null);
+		                    } else {
+		                        //zoom to marker
+		                        map.setZoom(14);
+		                    }
+		                    
+		                    //drop new marker at front
+		                    fun.ridepub.marker = new google.maps.Marker({
+						        position: latLng,
+						        map: map,
+						        title: "Speed:  " + (point.speedMetersPerSecond * 60 * 60 /1000).toFixed(2) + " km/h"
+						    });
+		                },
+		                
+		                visualizeSpeed: function (mqttMessage) {
+		                    var point = mqttMessage.message,
+		                        gaugeData = new google.visualization.DataTable();
+	                            gaugeData.addColumn('number', 'Speed km');
+	                            gaugeData.addRows(1);
+	                            gaugeData.setCell(0, 0, Math.round(point.speedMetersPerSecond * 60 * 60 /1000)),
+	                        	gaugeOptions = {
+	                                width: 180, 
+	                                height: 180, 
+	                                min: 0, 
+	                                max: 65, 
+	                                yellowFrom: 40, 
+	                                yellowTo: 55,
+	                            	redFrom: 55, 
+	                            	redTo: 65, 
+	                            	minorTicks: 2
+                            	};
+	                        var gauge = new google.visualization.Gauge(document.getElementById('vis_speed'));
+                          	gauge.draw(gaugeData, gaugeOptions);
+		                },
+		                
+		                visualizeHeartRate: function (mqttMessage) {
+		                    var point = mqttMessage.message;
+		                    document.getElementById('vis_heartRate').innerHTML = "HR: " + point.heartRate;
+		                },
+		                
+		                visualizeCadence: function (mqttMessage) {
+		                    var point = mqttMessage.message;
+		                    document.getElementById('vis_watts').innerHTML = "Power: " + point.watts + " watts";
+		                },
+		                
+		                visualizeWatts: function (mqttMessage) {
+		                    var point = mqttMessage.message;
+		                    document.getElementById('vis_cadence').innerHTML = "Cadence: " + point.cadence;
+		                },
+		                
+		                visualizeDistance: function (mqttMessage) {
+		                    var point = mqttMessage.message;
+		                    document.getElementById('vis_distance').innerHTML = "Distance: " + (parseFloat(point.distanceMeters)/1000).toFixed(2) + " k";
+		                }
+		                
+		            },
+		            
+		            m2m: {
+		                connect: function () {
+		                    console.log("connect");
+		                    
+	                        var socket = new SocketMQ({
+	                            username: 		'',	//your username
+	                            md5Password: 	'', //your password
+	                            subscribe: [{
+	                                topic: ['domain/stuff/thing'],    //your domain/stuff/thing
+	                                qos: 0
+	                            }],
+	                            ping: true
+	                        });
+
+	                        // Optional Event Listeners
+	                        socket.on('debug', function(debug) {
+	                            console.log('----- debug -----');
+	                            console.log(JSON.stringify(debug));
+	                        });
+
+	                        socket.on('error', function(error) {
+	                            console.log('----- error -----');
+	                            console.log(JSON.stringify(error));
+	                        });
+
+	                        socket.on('exception', function(exception) {
+	                            console.log('----- exception -----');
+	                            console.log(JSON.stringify(exception));
+	                        });
+
+	                        socket.on('connected', function() {
+	                            console.log('----- connected -----');
+	                        });
+
+	                        socket.on('data', function(data) {
+	                            fun.ridepub.mapPoint(data);
+	                            fun.ridepub.visualizeSpeed(data);
+	                            fun.ridepub.visualizeHeartRate(data);
+	                            fun.ridepub.visualizeCadence(data);
+	                            fun.ridepub.visualizeWatts(data);
+	                            fun.ridepub.visualizeDistance(data);
+	                            
+	                        });
+
+	                        socket.on('subscribed', function(subscribed) {
+	                            console.log('----- subscribed -----');
+	                            console.log(JSON.stringify(subscribed));
+	                        });
+
+	                        socket.on('unsubscribed', function(subscribed) {
+	                            console.log('----- unsubscribed -----');
+	                            console.log(JSON.stringify(subscribed));
+	                        });
+
+	                        socket.on('disconnected', function() {
+	                            console.log('----- disconnected -----');
+	                        });
+
+	                        socket.connect();
+		                }
+		            }
+		    };
+		    
+		    fun.m2m.connect();
+	    }
+    	google.load("visualization", "1", {packages:["corechart","gauge"]});
+	    google.maps.event.addDomListener(window, 'load', initialize);
+	    
+    </script>
+</head>
+<body>
+<div style="float:right;width:200px;height:100%;padding:10px;background-color:darkgray;color:white;font-family:arial;">
+	<div id="vis_speed"></div>
+	<div id="vis_heartRate"></div>
+	<div id="vis_cadence"></div>
+	<div id="vis_watts"></div>
+	<div id="vis_distance"></div>
+</div>
+<div id="map-canvas"></div>
+</body>
+</html>
