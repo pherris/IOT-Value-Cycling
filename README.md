@@ -1,6 +1,6 @@
 Cycling Telemetry Data
 ================================
-The ability to connect any number of devices to the Internet of Things is a paradigm shift that creates possibilities for existing organizations; however articulating the benefits can be challenging internally. This post shows the results of my efforts to showcase the power of the Internet of Things and 2lemetry.
+The ability to connect any number of devices to the Internet of Things is a paradigm shift that creates exciting possibilities for existing organizations; however articulating the benefits can be challenging internally. This post shows the results of my efforts to showcase the power of the Internet of Things and 2lemetry.
 
 The first challenge I faced was selecting a data set that a) applies to the business b) people can relate to and c) can provide some meaningful visualizations. Being in the transportation industry I wanted data that both represented location and information about what was happening at that location at that time. I toyed with the idea of generating a data set, but a straight line isn't that interesting! 
 
