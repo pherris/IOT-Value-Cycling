@@ -41,8 +41,8 @@
 	        };
 	        var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 	        
-	        var fun = {
-		            ridepub: {
+	        var com = {
+		            pherris: {
 		                marker: 	null,
 		                polyLine: 	(function () { 
 		                    var polyLine = new google.maps.Polyline({
@@ -77,18 +77,18 @@
 		                    
 		                    map.setCenter(latLng);
 		                    
-		                    fun.ridepub.polyLine.getPath().push(latLng);
+		                    com.pherris.polyLine.getPath().push(latLng);
 		                    
 		                    //clear old marker
-		                    if (fun.ridepub.marker) {
-		                        fun.ridepub.marker.setMap(null);
+		                    if (com.pherris.marker) {
+		                        com.pherris.marker.setMap(null);
 		                    } else {
 		                        //zoom to marker
 		                        map.setZoom(14);
 		                    }
 		                    
 		                    //drop new marker at front
-		                    fun.ridepub.marker = new google.maps.Marker({
+		                    com.pherris.marker = new google.maps.Marker({
 						        position: latLng,
 						        map: map,
 						        title: "Speed:  " + (point.speedMetersPerSecond * 60 * 60 /1000).toFixed(2) + " km/h"
@@ -146,7 +146,7 @@
 	                            username: 		'',	//your username
 	                            md5Password: 	'', //your password
 	                            subscribe: [{
-	                                topic: ['domain/stuff/thing'],    //your domain/stuff/thing
+	                                topic: ['{domain}/bike/ride'],    //your {domain}
 	                                qos: 0
 	                            }],
 	                            ping: true
@@ -173,12 +173,12 @@
 	                        });
 
 	                        socket.on('data', function(data) {
-	                            fun.ridepub.mapPoint(data);
-	                            fun.ridepub.visualizeSpeed(data);
-	                            fun.ridepub.visualizeHeartRate(data);
-	                            fun.ridepub.visualizeCadence(data);
-	                            fun.ridepub.visualizeWatts(data);
-	                            fun.ridepub.visualizeDistance(data);
+	                            com.pherris.mapPoint(data);
+	                            com.pherris.visualizeSpeed(data);
+	                            com.pherris.visualizeHeartRate(data);
+	                            com.pherris.visualizeCadence(data);
+	                            com.pherris.visualizeWatts(data);
+	                            com.pherris.visualizeDistance(data);
 	                            
 	                        });
 
@@ -201,7 +201,7 @@
 		            }
 		    };
 		    
-		    fun.m2m.connect();
+		    com.m2m.connect();
 	    }
     	google.load("visualization", "1", {packages:["corechart","gauge"]});
 	    google.maps.event.addDomListener(window, 'load', initialize);

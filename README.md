@@ -50,25 +50,50 @@ In your IDE create a new Maven project (skipping the archetype selection) and up
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>fun</groupId>
-  <artifactId>ridepub</artifactId>
+  <groupId>com.pherris</groupId>
+  <artifactId>IOT-Value-Cycling</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>jar</packaging>
 
-  <name>ridepub</name>
+  <name>IOT-Value-Cycling</name>
   <url>http://maven.apache.org</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
+  <repositories>
+    <repository>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>warn</checksumPolicy>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>never</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
+      </snapshots>
+      <id>eclipse</id>
+      <name>Eclipse Repo</name>
+      <url>https://repo.eclipse.org/content/repositories/paho-releases</url>
+      <layout>default</layout>
+    </repository>
+  </repositories>
+
   <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
     <!--  PAHO: MQTT client -->
-	<dependency>
-	  <groupId>org.eclipse</groupId>
-	  <artifactId>paho.client.mqttv3</artifactId>
-	  <version>1.0.0</version>
-	</dependency>
+    <dependency>
+      <groupId>org.eclipse.paho</groupId>
+      <artifactId>mqtt-client</artifactId>
+      <version>0.4.0</version>
+    </dependency>
     <!--  Gson: Java to Json conversion -->
     <dependency>
       <groupId>com.google.code.gson</groupId>
@@ -76,30 +101,63 @@ In your IDE create a new Maven project (skipping the archetype selection) and up
       <version>2.2.4</version>
       <scope>compile</scope>
     </dependency>
-	<!--  time utility -->
+    <!--  time utility -->
     <dependency>
-	  <groupId>joda-time</groupId>
-	  <artifactId>joda-time</artifactId>
-	  <version>1.5.2</version>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+      <version>1.5.2</version>
     </dependency>
   </dependencies>
+    	<build>
+		<plugins>
+			<plugin>
+	    		<groupId>org.apache.maven.plugins</groupId>
+	    		<artifactId>maven-jar-plugin</artifactId>
+    			<version>2.2</version>
+    			<!-- nothing here -->
+  			</plugin>
+  			<plugin>
+    			<groupId>org.apache.maven.plugins</groupId>
+    			<artifactId>maven-assembly-plugin</artifactId>
+    			<version>2.2-beta-4</version>
+    			<configuration>
+	      			<descriptorRefs>
+	        			<descriptorRef>jar-with-dependencies</descriptorRef>
+	      			</descriptorRefs>
+	      			<archive>
+	        			<manifest>
+	          				<mainClass>com.pherris.CyclingPublisher</mainClass>
+	        			</manifest>
+	      			</archive>
+    			</configuration>
+    			<executions>
+      				<execution>
+        				<phase>package</phase>
+        				<goals>
+          					<goal>single</goal>
+        				</goals>
+      				</execution>
+   				</executions>
+  			</plugin>
+		</plugins>
+	</build>
 </project>
 ```
 
-Create your package structure (the example uses fun.ridepub) and add a class called App.java. This program will accept the name (with full path) of your TCX file and publish it to q.m2m.io:
+Create your package structure (the example uses com.pherris) and add a class called CyclingPublisher.java. This program will accept the name (with full path) of your TCX file and publish it to q.m2m.io:
 
 ```
-package fun.ridepub;
+package com.pherris;
 
 import java.io.File;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttTopic;
@@ -114,178 +172,181 @@ import org.w3c.dom.NodeList;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
-public class App implements MqttCallback {
+public class CyclingPublisher implements MqttCallback {
 
-    MqttClient myClient;
-    MqttConnectOptions connOpt;
-    MqttTopic topic; 
-    Gson gson = new Gson();
-            
-    static final String BROKER_URL          = "tcp://q.m2m.io:1883";
-    static final String M2MIO_DOMAIN        = ""; //see Configuration section of blog or README for instructions 
-    static final String M2MIO_STUFF         = "";
-    static final String M2MIO_THING         = "";
-    static final String M2MIO_USERNAME      = "";
-    static final String M2MIO_PASSWORD_MD5  = "";
-    
-    public static void main(String args[]) {
-        App publisher = new App();
-        publisher.connect(M2MIO_DOMAIN + "/" + M2MIO_STUFF + "/" + M2MIO_THING);
-        publisher.parseXml(args[0]);
-    }
-    
-    /**
-     * Accepts a full path and file name to GPX file
-     * @param fileLocation
-     */
-    private void parseXml(String fileLocation) {
-        try {
+	MqttClient myClient;
+	MqttConnectOptions connOpt;
+	MqttTopic topic;
+	Gson gson = new Gson();
 
-            File gpxFile = new File(fileLocation);
-            
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(gpxFile);
-            doc.getDocumentElement().normalize();
+	static final String BROKER_URL = "tcp://q.m2m.io:1883";
+	static final String M2MIO_DOMAIN = ""; // your domain (from 2lemetry)
+	static final String M2MIO_USERNAME = ""; // your username
+	static final String M2MIO_PASSWORD_MD5 = ""; // your pwd (help.m2m.io)
 
-            NodeList nodes = doc.getElementsByTagName("Trackpoint");
-            
-            long lastPoint = 0;
+	public static void main(String args[]) {
+		CyclingPublisher publisher = new CyclingPublisher();
+		publisher.connect();
+		publisher.parseXml(args[0]);
+	}
 
-            for (int i = 0; i < nodes.getLength(); i++) {
-                //can move parsing logic into new method for testability
-                Node node = nodes.item(i);
+	/**
+	 * Accepts a full path and file name to GPX file
+	 * 
+	 * @param fileLocation
+	 */
+	private void parseXml(String fileLocation) {
+		try {
 
-                if (node.getNodeType() == Node.ELEMENT_NODE) {
-                    Element element = (Element) node;
-                    long currentPoint = getTimeStampMillis(getValue("Time", element));
-                    
-                    Thread.sleep(lastPoint==0 ? 0 : currentPoint-lastPoint); //delay before publish - first one immediately, as it happened after that 
-                    
-                    JsonObject point = new JsonObject();
-                    point.addProperty("name",                   gpxFile.getName());
-                    
-                    point.addProperty("latitude",               getValue("LatitudeDegrees", element));
-                    point.addProperty("longitude",              getValue("LongitudeDegrees", element));
-                    point.addProperty("altitudeMeters",         getValue("AltitudeMeters", element));
-                    point.addProperty("distanceMeters",         getValue("DistanceMeters", element));
+			File gpxFile = new File(fileLocation);
 
-                    point.addProperty("timeUTC",                getValue("Time", element));
-                    point.addProperty("timeMillis",             currentPoint);
-                    
-                    point.addProperty("heartRate",              getValue("Value", element));
-                    point.addProperty("cadence",                getValue("Cadence", element));
-                    point.addProperty("speedMetersPerSecond",   getValue("Speed", element));
-                    point.addProperty("watts",                  getValue("Watts", element));
-                    
-                    publishMessage(point.toString());
-                    
-                    lastPoint = currentPoint;
-                }
-            }
-        } catch (Exception ex) {
-            //catch all exceptions and log for debugging
-            ex.printStackTrace();
-        }
-    }
-    
-    /**
-     * Accepts a string payload and publishes via MQTT at QoS 0
-     * @param payload
-     */
-    private void publishMessage(String payload) {
-        System.out.println(payload);
-        int pubQoS = 0;
-        MqttMessage message = new MqttMessage(payload.getBytes());
-        message.setQos(pubQoS);
-        message.setRetained(false);
+			DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+			Document doc = dBuilder.parse(gpxFile);
+			doc.getDocumentElement().normalize();
 
-        try {
-            // publish message to broker
-            topic.publish(message);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * connects to broker and keeps connection alive
-     * @param subTopic
-     */
-    private void connect(String subTopic) {
-        System.out.println("Connect to: " + BROKER_URL);
-        // setup MQTT Client
-        String clientID = M2MIO_THING;
-        connOpt = new MqttConnectOptions();
-        
-        connOpt.setCleanSession(true);
-        connOpt.setKeepAliveInterval(30);
-        connOpt.setUserName(M2MIO_USERNAME);
-        connOpt.setPassword(M2MIO_PASSWORD_MD5.toCharArray());
-        
-        // Connect to Broker
-        try {
-            myClient = new MqttClient(BROKER_URL, clientID);
-            myClient.setCallback(this);
-            myClient.connect(connOpt);
-        } catch (MqttException e) {
-            e.printStackTrace();
-            System.exit(-1);
-        }
+			NodeList nodes = doc.getElementsByTagName("Trackpoint");
 
-        // setup topic
-        topic = myClient.getTopic(subTopic);
-    }
+			long lastPoint = 0;
 
-    /**
-     * Helper method to get values from the xml object. If a particular object does not 
-     * have the tag you are looking for an empty string will be returned.
-     * @param tag the XML element you are looking for
-     * @param element the parent XML object
-     * @return String value of the element you seek
-     */
-    private static String getValue(String tag, Element element) {
-        try {
-            NodeList nodes = element.getElementsByTagName(tag).item(0).getChildNodes();
-            Node node = (Node) nodes.item(0);
-            return node.getNodeValue();
-        } catch (NullPointerException npe) {
-            //fail quietly since not all rides have all values (e.g. power) etc...
-            return "";
-        }
-    }
-    
-    /**
-     * Helper method to take the ISO formatted date string and return milliseconds
-     * @param timestamp
-     * @return
-     */
-    private static long getTimeStampMillis(String timestamp) {
-        DateTimeFormatter parser = ISODateTimeFormat.dateTime();
-        DateTime dt = parser.parseDateTime(timestamp);
+			for (int i = 0; i < nodes.getLength(); i++) {
+				// can move parsing logic into new method for testability
+				Node node = nodes.item(i);
 
-        return dt.getMillis();
-    }
+				if (node.getNodeType() == Node.ELEMENT_NODE) {
+					Element element = (Element) node;
+					long currentPoint = getTimeStampMillis(getValue("Time", element));
 
-    public void connectionLost(Throwable arg0) {
-        // TODO Auto-generated method stub
-        System.out.println("lost connection");
-        connect(M2MIO_DOMAIN + "/" + M2MIO_STUFF + "/" + M2MIO_THING);
-        
-    }
+					Thread.sleep(lastPoint == 0 ? 0 : currentPoint - lastPoint); // delay before publish - first one immediately, as it happened after that
 
-    public void deliveryComplete(MqttDeliveryToken arg0) {
-        // TODO Auto-generated method stub
-        System.out.println("delivery complete");
-        
-    }
+					JsonObject point = new JsonObject();
+					point.addProperty("name", gpxFile.getName());
 
-    public void messageArrived(MqttTopic arg0, MqttMessage arg1)
-            throws Exception {
-        System.out.println("message arrived - thats surprising");
-        // TODO Auto-generated method stub
-        
-    }
+					point.addProperty("latitude", getValue("LatitudeDegrees", element));
+					point.addProperty("longitude", getValue("LongitudeDegrees", element));
+					point.addProperty("altitudeMeters", getValue("AltitudeMeters", element));
+					point.addProperty("distanceMeters", getValue("DistanceMeters", element));
+
+					point.addProperty("timeUTC", getValue("Time", element));
+					point.addProperty("timeMillis", currentPoint);
+
+					point.addProperty("heartRate", getValue("Value", element));
+					point.addProperty("cadence", getValue("Cadence", element));
+					point.addProperty("speedMetersPerSecond", getValue("Speed", element));
+					point.addProperty("watts", getValue("Watts", element));
+
+					publishMessage(point.toString());
+
+					lastPoint = currentPoint;
+				}
+			}
+		} catch (Exception ex) {
+			// catch all exceptions and log for debugging
+			ex.printStackTrace();
+		}
+	}
+
+	/**
+	 * Accepts a string payload and publishes via MQTT at QoS 0
+	 * 
+	 * @param payload
+	 */
+	private void publishMessage(String payload) {
+		System.out.println(payload);
+		int pubQoS = 0;
+		MqttMessage message = new MqttMessage(payload.getBytes());
+		message.setQos(pubQoS);
+		message.setRetained(false);
+
+		try {
+			// publish message to broker
+			topic.publish(message);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * connects to broker and keeps connection alive
+	 * 
+	 */
+	private void connect() {
+		System.out.println("Connect to: " + BROKER_URL);
+		// setup MQTT Client
+		String clientID = M2MIO_USERNAME;
+		connOpt = new MqttConnectOptions();
+
+		connOpt.setCleanSession(true);
+		connOpt.setKeepAliveInterval(30);
+		connOpt.setUserName(M2MIO_USERNAME);
+		connOpt.setPassword(M2MIO_PASSWORD_MD5.toCharArray());
+
+		// Connect to Broker
+		try {
+			myClient = new MqttClient(BROKER_URL, clientID);
+			myClient.setCallback(this);
+			myClient.connect(connOpt);
+		} catch (MqttException e) {
+			e.printStackTrace();
+			System.exit(-1);
+		}
+
+		// setup topic
+		topic = myClient.getTopic(M2MIO_DOMAIN + "/bike/ride");
+	}
+
+	/**
+	 * Helper method to get values from the xml object. If a particular object does not have the tag you are looking for an empty string will be returned.
+	 * 
+	 * @param tag
+	 *            the XML element you are looking for
+	 * @param element
+	 *            the parent XML object
+	 * @return String value of the element you seek
+	 */
+	private static String getValue(String tag, Element element) {
+		try {
+			NodeList nodes = element.getElementsByTagName(tag).item(0).getChildNodes();
+			Node node = nodes.item(0);
+			return node.getNodeValue();
+		} catch (NullPointerException npe) {
+			// fail quietly since not all rides have all values (e.g. power) etc...
+			return "";
+		}
+	}
+
+	/**
+	 * Helper method to take the ISO formatted date string and return milliseconds
+	 * 
+	 * @param timestamp
+	 * @return
+	 */
+	private static long getTimeStampMillis(String timestamp) {
+		DateTimeFormatter parser = ISODateTimeFormat.dateTime();
+		DateTime dt = parser.parseDateTime(timestamp);
+
+		return dt.getMillis();
+	}
+
+	public void connectionLost(Throwable arg0) {
+		// TODO Auto-generated method stub
+		System.out.println("lost connection");
+		connect(M2MIO_DOMAIN + "/" + M2MIO_STUFF + "/" + M2MIO_THING);
+
+	}
+
+	public void deliveryComplete(IMqttDeliveryToken arg0) {
+		// TODO Auto-generated method stub
+		System.out.println("delivery complete");
+
+	}
+
+	public void messageArrived(String arg0, MqttMessage arg1) throws Exception {
+		System.out.println("message arrived - thats surprising");
+		// TODO Auto-generated method stub
+
+	}
+
 }
 ```
 
@@ -293,12 +354,10 @@ Configuration
 -------------------------
 Whew, that was a lot of Copy and Paste!  Tweak the configuration settings below to get your code up and running.
 ```
-static final String BROKER_URL          = "tcp://q.m2m.io:1883";                //Your MQTT broker
-static final String M2MIO_DOMAIN        = "";                                   //Your domain, procured from m2m.io
-static final String M2MIO_STUFF         = "";                                   //Your 'stuff'
-static final String M2MIO_THING         = "";                                   //Your 'thing'
-static final String M2MIO_USERNAME      = "";                                   //Your user name (procured from http://help.m2m.io)
-static final String M2MIO_PASSWORD_MD5  = "";                                   //Your md5sum (procured with user name above)
+	static final String BROKER_URL = 			"tcp://q.m2m.io:1883";
+	static final String M2MIO_DOMAIN = 			""; //Your domain, procured from m2m.io
+	static final String M2MIO_USERNAME = 		""; // your username
+	static final String M2MIO_PASSWORD_MD5 = 	""; // your pwd (help.m2m.io)
 ```
 Method Overview
 -------------------------
@@ -318,12 +377,12 @@ Running the Application
 -------------------------
 You can run the application from within Eclipse by selecting Run -> Run Configurations. Find this project/class under Java Application and select it (you might have to run it once first for it to show up!). On the right, select the Arguments tab and enter the full file path to your TCX file. Select Apply and Run.
 
-
-You can also export the Jar (with dependencies) and run from the command line with the first parameter being the full path to your TCX file.
+You can also use Maven to export a Jar to be run from the command line with the first parameter being the full path to your TCX file.
 ```
-java -jar MyJarFileName.jar /path/to/my/file.tcx
+mvn package
+java -jar target/IOT-Value-Cycling-0.0.1-SNAPSHOT-jar-with-dependencies.jar rides/activity_349469173.tcx
 ```
-Once the application is running without errors you should see a log the cycling data that was published to m2m.io at the same interval it was captured in (this means that if you stopped your bike and your bike computer 'auto paused' (that's cheating by the way ;), you will not see any data being published for the same amount of time you were stopped).
+Once the application is running without errors you should see each point of the cycling data that was published to m2m.io. Note that data is published at the same interval it was captured  (this means that if you stopped your bike and your bike computer 'auto paused' (that's cheating by the way ;), you will not see any data being published for the same amount of time you were stopped).
 
 Viewing Your Ride
 ================================
@@ -377,8 +436,8 @@ Now that you are publishing your ride via m2m.io it's time to visualize the data
 	        };
 	        var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 	        
-	        var fun = {
-		            ridepub: {
+	        var com = {
+		            pherris: {
 		                marker: 	null,
 		                polyLine: 	(function () { 
 		                    var polyLine = new google.maps.Polyline({
@@ -413,18 +472,18 @@ Now that you are publishing your ride via m2m.io it's time to visualize the data
 		                    
 		                    map.setCenter(latLng);
 		                    
-		                    fun.ridepub.polyLine.getPath().push(latLng);
+		                    com.pherris.polyLine.getPath().push(latLng);
 		                    
 		                    //clear old marker
-		                    if (fun.ridepub.marker) {
-		                        fun.ridepub.marker.setMap(null);
+		                    if (com.pherris.marker) {
+		                        com.pherris.marker.setMap(null);
 		                    } else {
 		                        //zoom to marker
 		                        map.setZoom(14);
 		                    }
 		                    
 		                    //drop new marker at front
-		                    fun.ridepub.marker = new google.maps.Marker({
+		                    com.pherris.marker = new google.maps.Marker({
 						        position: latLng,
 						        map: map,
 						        title: "Speed:  " + (point.speedMetersPerSecond * 60 * 60 /1000).toFixed(2) + " km/h"
@@ -479,10 +538,10 @@ Now that you are publishing your ride via m2m.io it's time to visualize the data
 		                    console.log("connect");
 		                    
 	                        var socket = new SocketMQ({
-	                            username: 		'',
-	                            md5Password: 	'',
+	                            username: 		'',	//your username
+	                            md5Password: 	'', //your password
 	                            subscribe: [{
-	                                topic: ['//'],
+	                                topic: ['{domain}/bike/ride'],    //your {domain}
 	                                qos: 0
 	                            }],
 	                            ping: true
@@ -509,12 +568,12 @@ Now that you are publishing your ride via m2m.io it's time to visualize the data
 	                        });
 
 	                        socket.on('data', function(data) {
-	                            fun.ridepub.mapPoint(data);
-	                            fun.ridepub.visualizeSpeed(data);
-	                            fun.ridepub.visualizeHeartRate(data);
-	                            fun.ridepub.visualizeCadence(data);
-	                            fun.ridepub.visualizeWatts(data);
-	                            fun.ridepub.visualizeDistance(data);
+	                            com.pherris.mapPoint(data);
+	                            com.pherris.visualizeSpeed(data);
+	                            com.pherris.visualizeHeartRate(data);
+	                            com.pherris.visualizeCadence(data);
+	                            com.pherris.visualizeWatts(data);
+	                            com.pherris.visualizeDistance(data);
 	                            
 	                        });
 
@@ -537,7 +596,7 @@ Now that you are publishing your ride via m2m.io it's time to visualize the data
 		            }
 		    };
 		    
-		    fun.m2m.connect();
+		    com.m2m.connect();
 	    }
     	google.load("visualization", "1", {packages:["corechart","gauge"]});
 	    google.maps.event.addDomListener(window, 'load', initialize);
@@ -566,7 +625,7 @@ var socket = new SocketMQ({
     username: 		'',         //Your user name (procured from http://help.m2m.io, same account as the Java code)
     md5Password: 	'',         //Your md5sum password (procured from http://help.m2m.io, same account as the Java code)
     subscribe: [{
-        topic: ['YOUR_DOMAIN/YOUR_SUFF/YOUR_THING'], //maps to the same domain/stuff/thing you used in your Java app
+        topic: ['{domain}/bike/ride'], //Replace {domain} with your domain (procured from http://help.m2m.io, same account as the Java code). Leave /bike/ride
         qos: 0
     }],
     ping: true
@@ -575,16 +634,16 @@ var socket = new SocketMQ({
 Method Overview
 -------------------------
 Another section you are welcome to skip - just an overview of what each part of the JavaScript is up to.
-* initialize: This is the entry point into the web application and is called by Google when ready to render. This method creates the fun object which contains all methods used to render your ride.
-* fun.ridepub.marker: variable that holds the currently displayed marker on the map (used to keep the marker always at the front of the line).
-* fun.ridepub.polyLine: object used to render the 'path' of your ride.
-* fun.ridepub.mapPoint: method that draws the line representing your ride and drops the marker at the front.
-* fun.ridepub.visualizeSpeed: method to show a little more complex visualization of one of the data points received via MQTT.
-* fun.ridepub.visualizeHeartRate: displays current HR on the screen
-* fun.ridepub.visualizeCadence: displays current cadence on the screen
-* fun.ridepub.visualizeWatts: displays current power on the screen
-* fun.ridepub.visualizeDistance: displays overall distance on the screen
-* fun.m2m.connect: connects to m2m.io and subscribes to your topic. Hands data off to mapPoint and visualize* methods.
+* initialize: This is the entry point into the web application and is called by Google when ready to render. This method creates the com.pherris object which contains all methods used to render your ride.
+* com.pherris.marker: variable that holds the currently displayed marker on the map (used to keep the marker always at the front of the line).
+* com.pherris.polyLine: object used to render the 'path' of your ride.
+* com.pherris.mapPoint: method that draws the line representing your ride and drops the marker at the front.
+* com.pherris.visualizeSpeed: method to show a little more complex visualization of one of the data points received via MQTT.
+* com.pherris.visualizeHeartRate: displays current HR on the screen
+* com.pherris.visualizeCadence: displays current cadence on the screen
+* com.pherris.visualizeWatts: displays current power on the screen
+* com.pherris.visualizeDistance: displays overall distance on the screen
+* com.m2m.connect: connects to m2m.io and subscribes to your topic. Hands data off to mapPoint and visualize* methods.
 
 Running the Application
 -------------------------
@@ -601,7 +660,7 @@ Finding TCX Files
 -------------------------
 If you use Garmin Connect you can log into your account, go to the Analyze tab and select Activities. Select your ride from the list. On the ride detail screen you will see an "Export" button. Select TCX and your file should download.
 
-You can also download a sample ride from the GitHub repo: https://github.com/pherris/MQTT-Cycling-Viewer under the rides/ directory.
+You can also download a sample ride from the GitHub repo: https://github.com/pherris/IOT-Value-Cycling under the rides/ directory.
 
 Overview
 ================================

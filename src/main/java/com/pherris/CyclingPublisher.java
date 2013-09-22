@@ -31,15 +31,13 @@ public class CyclingPublisher implements MqttCallback {
 	Gson gson = new Gson();
 
 	static final String BROKER_URL = "tcp://q.m2m.io:1883";
-	static final String M2MIO_DOMAIN = ""; // your domain
-	static final String M2MIO_STUFF = ""; // your stuff
-	static final String M2MIO_THING = ""; // your thing
+	static final String M2MIO_DOMAIN = ""; // your domain (from 2lemetry)
 	static final String M2MIO_USERNAME = ""; // your username
 	static final String M2MIO_PASSWORD_MD5 = ""; // your pwd (help.m2m.io)
 
 	public static void main(String args[]) {
 		CyclingPublisher publisher = new CyclingPublisher();
-		publisher.connect(M2MIO_DOMAIN + "/" + M2MIO_STUFF + "/" + M2MIO_THING);
+		publisher.connect();
 		publisher.parseXml(args[0]);
 	}
 
@@ -122,12 +120,11 @@ public class CyclingPublisher implements MqttCallback {
 	/**
 	 * connects to broker and keeps connection alive
 	 * 
-	 * @param subTopic
 	 */
-	private void connect(String subTopic) {
+	private void connect() {
 		System.out.println("Connect to: " + BROKER_URL);
 		// setup MQTT Client
-		String clientID = M2MIO_THING;
+		String clientID = M2MIO_USERNAME;
 		connOpt = new MqttConnectOptions();
 
 		connOpt.setCleanSession(true);
@@ -146,7 +143,7 @@ public class CyclingPublisher implements MqttCallback {
 		}
 
 		// setup topic
-		topic = myClient.getTopic(subTopic);
+		topic = myClient.getTopic(M2MIO_DOMAIN + "/bike/ride");
 	}
 
 	/**
@@ -185,8 +182,7 @@ public class CyclingPublisher implements MqttCallback {
 	public void connectionLost(Throwable arg0) {
 		// TODO Auto-generated method stub
 		System.out.println("lost connection");
-		connect(M2MIO_DOMAIN + "/" + M2MIO_STUFF + "/" + M2MIO_THING);
-
+		connect();
 	}
 
 	public void deliveryComplete(IMqttDeliveryToken arg0) {
