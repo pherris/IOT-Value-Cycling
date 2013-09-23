@@ -662,6 +662,158 @@ If you use Garmin Connect you can log into your account, go to the Analyze tab a
 
 You can also download a sample ride from the GitHub repo: https://github.com/pherris/IOT-Value-Cycling under the rides/ directory.
 
+
+
+
+Historical Data
+-------------------------
+So far, we have written a simple application to parse data into our 2lemetry account and used a simple Google Maps visualization to map the data as it is received in real time. 
+
+Taking one step further, how do we query the data out of 2lemetry after it is loaded? With a second HTML visualization using Google Maps, we can query the 2lemetry API to get a data set for a specified range of time.
+
+```
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<style type="text/css">
+html {
+	height: 100%
+}
+
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0
+}
+
+#map-canvas {
+	height: 100%
+}
+</style>
+
+<script type="text/javascript"
+	src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript"
+	src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+<script type="text/javascript">
+	//IE Fix
+	if (console == null || console.log == null) {
+		var console = {
+			log : function() {
+				//no-op
+			}
+		};
+	}
+
+	if (JSON == null || JSON.stringify == null) {
+		var JSON = {
+			stringify : function() {
+				//no-op
+			}
+		};
+	}
+
+	function initialize() {
+		console.log("initalize");
+
+		var mapOptions = {
+			center : new google.maps.LatLng(39.8282, -98.5795),
+			zoom : 4,
+			mapTypeId : google.maps.MapTypeId.ROADMAP
+		};
+		var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+
+		var com = {
+			pherris : {
+				marker : null,
+				polyLine : (function() {
+					var polyLine = new google.maps.Polyline({
+						strokeColor : "#15317E",
+						strokeOpacity : 1.0,
+						strokeWeight : 4,
+						path : new Array()
+					});
+					polyLine.setMap(map);
+					return polyLine;
+				})(),
+
+				/**
+				 * draws a line with a marker at the front.
+				 **/
+				mapPoint : function(point) {
+
+					if (typeof point.latitude == "string") {
+						point.latitude = parseFloat(point.latitude);
+						point.longitude = parseFloat(point.longitude);
+						point.speedMetersPerSecond = parseFloat(point.speedMetersPerSecond);
+					}
+
+					//throw out bad GPS
+					if (point.latitude.toFixed().replace("-", "") == "0" || point.longitude.toFixed().replace("-", "") == "0") {
+						return;
+					}
+
+					var latLng = new google.maps.LatLng(point.latitude, point.longitude);
+
+					map.setCenter(latLng);
+
+					com.pherris.polyLine.getPath().push(latLng);
+
+					//clear old marker
+					if (com.pherris.marker) {
+						com.pherris.marker.setMap(null);
+					} else {
+						//zoom to marker
+						map.setZoom(14);
+					}
+
+					//drop new marker at front
+					com.pherris.marker = new google.maps.Marker({
+						position : latLng,
+						map : map,
+						title : "Speed:  " + (point.speedMetersPerSecond * 60 * 60 / 1000).toFixed(2) + " km/h"
+					});
+				},
+			},
+
+			m2m : {
+				getHistory : function() {
+					$.ajax({
+						url : "http://api.m2m.io/2/account/domain/{domain}/stuff/bike/thing/ride/past?attributes=_&start={most recent timestamp}&end={oldest timestamp}", //change {domain} with your 2lemetry domain. change the timestamps with 16-digit Unix timestamps for the range to query
+						success : function(data, status, jqxhr) {
+							for ( var result in data.results) {
+								com.pherris.mapPoint(data.results[result]);
+							}
+						},
+						headers : {
+							'Authorization' : "{user}:{pass}" //change {user} to your username and {pass} to your password
+						}
+					});
+				}
+			}
+		};
+
+		com.m2m.getHistory();
+	}
+	google.load("visualization", "1", {
+		packages : [ "corechart", "gauge" ]
+	});
+	google.maps.event.addDomListener(window, 'load', initialize);
+</script>
+</head>
+<body>
+	<div id="map-canvas"></div>
+</body>
+</html>
+```
+
+Configuration
+-------------------------
+Configuring the API call is similar to the previous step. You'll need your 2lemetry domain, a base64 encoded string of your 2lemetry username:password (encode actual password, not the md5), and the Unix timestamps of the range of data you want. Replace the {sections} in the getHistory() call of web/history.html with these values.
+
 Overview
 ================================
 Now that everything is up and running - remember WHY you went through the effort to set this up. In a few steps you published, subscribed and mapped data - imagine the power of all of your devices being connected.  Visualizing a useful data set is a GREAT way to showcase the power, flexibility and value of the Internet of Things. I hope this will help YOU sell the value of M2M in your organization! 
