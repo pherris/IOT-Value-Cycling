@@ -812,7 +812,7 @@ body {
 
 Configuration
 -------------------------
-Configuring the API call is similar to the previous step. You'll need your 2lemetry domain, a base64 encoded string of your 2lemetry username:password (encode actual password, not the md5), and the Unix timestamps of the range of data you want. Replace the {sections} in the getHistory() call of web/history.html with these values.
+Configuring the API call is similar to the previous step. You'll need your 2lemetry domain, your 2lemetry username and password, and the Unix timestamps of the range of data you want. Replace the {sections} in the getHistory() call of web/history.html with these values.
 
 Overview
 ================================
